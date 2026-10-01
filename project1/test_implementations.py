@@ -196,3 +196,161 @@ def test_inputs_not_modified(random_problem, method, extra_args):
     originals = [a for a in (y, tx) + extra_args if isinstance(a, np.ndarray)]
     for before, after in zip(copies, originals):
         np.testing.assert_array_equal(before, after)
+
+
+# ---------------------------------------------------------------------------
+# Logistic regression
+# ---------------------------------------------------------------------------
+
+REQUIRED_FUNCTIONS = [
+    "mean_squared_error_gd",
+    "mean_squared_error_sgd",
+    "least_squares",
+    "ridge_regression",
+    "logistic_regression",
+    "reg_logistic_regression",
+]
+
+needs_reg_logistic = pytest.mark.skipif(
+    not hasattr(impl, "reg_logistic_regression"),
+    reason="reg_logistic_regression is not implemented yet",
+)
+
+
+@pytest.fixture()
+def y_binary(y):
+    """Binary labels built the same way as in the grading tests."""
+    return (y > 0.2) * 1.0
+
+
+@pytest.fixture()
+def random_classification():
+    """Non-separable binary problem with N=300 samples and D=4 features."""
+    rng = np.random.default_rng(1)
+    tx = np.c_[np.ones(300), rng.normal(size=(300, 3))]
+    true_w = np.array([0.3, 1.0, -2.0, 0.5])
+    p = 1 / (1 + np.exp(-tx @ true_w))
+    y = (rng.random(300) < p) * 1.0
+    return y, tx
+
+
+def reference_log_loss(y, tx, w):
+    """Mean negative log-likelihood, written independently of implementations.py."""
+    z = tx @ w
+    # log(1 + exp(z)) - y * z, computed stably with logaddexp
+    return np.mean(np.logaddexp(0, z) - y * z)
+
+
+@pytest.mark.parametrize("function_name", REQUIRED_FUNCTIONS)
+def test_required_function_exists_with_docstring(function_name):
+    # The grader checks both that the function exists and that it has a docstring
+    assert hasattr(impl, function_name), f"{function_name} is missing"
+    assert getattr(impl, function_name).__doc__, f"{function_name} has no docstring"
+
+
+def test_compute_probabilities():
+    tx = np.array([[0.0], [1.0], [-1.0]])
+    p = impl.compute_probabilities(tx, np.array([2.0]))
+    np.testing.assert_allclose(p, [0.5, 1 / (1 + np.exp(-2)), 1 / (1 + np.exp(2))])
+
+
+def test_log_loss_at_zero_weights(random_classification):
+    # With w = 0 every probability is 0.5, so the loss is log(2)
+    y, tx = random_classification
+    assert np.isclose(impl.log_loss(y, tx, np.zeros(4)), np.log(2))
+
+
+def test_log_loss_matches_reference(random_classification):
+    y, tx = random_classification
+    w = np.array([0.1, -0.4, 0.7, 0.2])
+    assert np.isclose(impl.log_loss(y, tx, w), reference_log_loss(y, tx, w))
+
+
+def test_log_loss_gradient_matches_finite_differences(random_classification):
+    y, tx = random_classification
+    w = np.array([0.1, -0.4, 0.7, 0.2])
+    eps = 1e-6
+    numerical = np.array(
+        [
+            (
+                reference_log_loss(y, tx, w + eps * e)
+                - reference_log_loss(y, tx, w - eps * e)
+            )
+            / (2 * eps)
+            for e in np.eye(4)
+        ]
+    )
+    np.testing.assert_allclose(impl.log_loss_gradient(y, tx, w), numerical, atol=1e-7)
+
+
+def test_logistic_regression_0_step(y_binary, tx):
+    w0 = np.array([0.463156, 0.939874])
+    w, loss = impl.logistic_regression(y_binary, tx, w0, 0, GAMMA)
+    check_output(w, loss, w0, 1.533694)
+
+
+def test_logistic_regression(y_binary, tx, initial_w):
+    w, loss = impl.logistic_regression(y_binary, tx, initial_w, MAX_ITERS, GAMMA)
+    check_output(w, loss, [0.378561, 0.801131], 1.348358)
+
+
+def test_logistic_regression_loss_decreases(random_classification):
+    y, tx = random_classification
+    w0 = np.zeros(4)
+    losses = [impl.logistic_regression(y, tx, w0, k, 0.5)[1] for k in range(10)]
+    assert all(b < a for a, b in zip(losses, losses[1:]))
+
+
+def test_logistic_regression_converges(random_classification):
+    # At the optimum of the (convex) log-loss the gradient vanishes
+    y, tx = random_classification
+    w, loss = impl.logistic_regression(y, tx, np.zeros(4), 5000, 1.0)
+    np.testing.assert_allclose(impl.log_loss_gradient(y, tx, w), 0, atol=1e-6)
+    assert np.isclose(loss, reference_log_loss(y, tx, w))
+
+
+def test_log_loss_is_finite_for_large_scores():
+    # Unscaled features can give scores like +-1000; the loss must stay finite
+    tx = np.array([[1000.0], [-1000.0]])
+    y = np.array([0.0, 1.0])
+    w = np.array([1.0])
+    with np.errstate(all="ignore"):
+        loss = impl.log_loss(y, tx, w)
+    assert np.isfinite(loss)
+    assert np.isclose(loss, reference_log_loss(y, tx, w))
+
+
+@needs_reg_logistic
+def test_reg_logistic_regression_0_step(y_binary, tx):
+    w0 = np.array([0.409111, 0.843996])
+    w, loss = impl.reg_logistic_regression(y_binary, tx, 1.0, w0, 0, GAMMA)
+    check_output(w, loss, w0, 1.407327)
+
+
+@needs_reg_logistic
+def test_reg_logistic_regression(y_binary, tx, initial_w):
+    w, loss = impl.reg_logistic_regression(
+        y_binary, tx, 1.0, initial_w, MAX_ITERS, GAMMA
+    )
+    check_output(w, loss, [0.216062, 0.467747], 0.972165)
+
+
+@needs_reg_logistic
+def test_reg_logistic_regression_lambda0_equals_logistic(random_classification):
+    y, tx = random_classification
+    w_reg, loss_reg = impl.reg_logistic_regression(y, tx, 0.0, np.zeros(4), 50, 0.5)
+    w, loss = impl.logistic_regression(y, tx, np.zeros(4), 50, 0.5)
+    np.testing.assert_allclose(w_reg, w)
+    assert np.isclose(loss_reg, loss)
+
+
+@needs_reg_logistic
+def test_reg_logistic_regression_optimum_and_loss(random_classification):
+    y, tx = random_classification
+    lambda_ = 0.1
+    w, loss = impl.reg_logistic_regression(y, tx, lambda_, np.zeros(4), 5000, 0.5)
+    # Gradient of log-loss + lambda * ||w||^2 vanishes at the optimum
+    grad = impl.log_loss_gradient(y, tx, w) + 2 * lambda_ * w
+    np.testing.assert_allclose(grad, 0, atol=1e-6)
+    # Returned loss must not include the penalty term
+    assert np.isclose(loss, reference_log_loss(y, tx, w))
