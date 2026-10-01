@@ -128,3 +128,57 @@ def ridge_regression(y, tx, lambda_):
     b = tx.T.dot(y)
     w = np.linalg.solve(a, b)
     return w, compute_mse(y, tx, w)
+
+# Logistic regression
+
+def compute_utilities(tx, w):
+    # tx contains the features for all observations (N, D)
+    # w contains the model parameters (D,)
+    # Compute the utility/score U = Xw for each observation
+    return tx.dot(w)
+
+
+def compute_probabilities(tx, w):
+    # Compute the utility for each observation
+    U = compute_utilities(tx, w)
+    
+    # Convert the utility into a probability using the logistic function
+    # P = 1 / (1 + exp(-U))
+    return 1 / (1 + np.exp(-U))
+
+
+def log_loss(y, tx, w):
+    # Compute the predicted probabilities
+    P = compute_probabilities(tx, w)
+    
+    # Number of observations
+    N = len(y)
+    
+    # Compute the average binary cross-entropy (logistic) loss
+    # This measures the difference between the true labels y and probabilities P
+    return -1/N * np.sum(y * np.log(P) + (1-y) * np.log(1-P))
+
+
+def log_loss_gradient(y, tx, w):
+    # Number of observations
+    N = len(y)
+    
+    # Compute the gradient of the log-loss with respect to w
+    # Gradient = (1/N) * X^T * (P - y)
+    return 1/N * tx.T.dot(compute_probabilities(tx, w) - y)
+
+
+def logistic_regression(y, tx, initial_w, max_iters, gamma):
+    # Initialize the model parameters with the given initial values
+    w = initial_w
+    
+    # Repeat the gradient descent update for the specified number of iterations
+    for i in range(max_iters):
+        # Compute the gradient of the log-loss
+        gradient = log_loss_gradient(y, tx, w)
+        
+        # Update the parameters in the direction that decreases the loss
+        w = w - gamma * gradient
+
+    # Return the optimized parameters and the final loss
+    return w, log_loss(y, tx, w)
