@@ -1,4 +1,4 @@
 project1/data/*.zip
 __pycache__/
 *.pyc
-project1/cache/*
+project1/cache/*.npy
