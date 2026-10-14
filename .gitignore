@@ -1,4 +1,10 @@
-project1/data/*.zip
+data/*.zip
+data/cache/
 __pycache__/
 *.pyc
-project1/cache/*.npy
+.pytest_cache/
+.vs/
+.ipynb_checkpoints/
+ex0*/
+submission*.csv
+results/*.log
