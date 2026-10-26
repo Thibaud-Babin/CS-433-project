@@ -13,21 +13,39 @@ Only Python, NumPy and matplotlib are used (no external ML libraries).
 | `preprocessing.py` | Data loading with `.npy` cache, feature cleaning / one-hot encoding / standardization (`Preprocessor`), label conversion |
 | `cross_validation.py` | F1 / accuracy, F1-optimal threshold, stratified k-fold cross-validation |
 | `tune.py` | Hyperparameter search of all methods with 5-fold CV, results in `results/cv_results.csv` |
+| `run.py` | Reproducible end-to-end script: trains a model and writes the AIcrowd submission (`submission.csv`) |
 | `eda.ipynb` | Exploratory data analysis |
 | `test_implementations.py`, `test_pipeline.py` | Unit tests (`pytest`) |
-| `run.py` | *To do:* reproduces our best submission |
+| `report/` | LaTeX template (IEEEtran) for the 2-page report |
+| `grading_tests/` | Course-provided public tests and `environment.yml` |
 
 ## Setup
 
 Put `x_train.csv`, `y_train.csv` and `x_test.csv` in `data/` (they are
 tracked with Git LFS: `git lfs pull`). The first data load parses the CSVs
-(~4 min) and caches them in `data/cache/`; later loads take seconds.
+(~1 min) and caches them in `data/cache/`; later loads take seconds.
 
 ```
 python tune.py --features selected   # 21 hand-picked features
 python tune.py --features all        # all non-metadata features
 pytest test_implementations.py test_pipeline.py
 ```
+
+## Reproducing the submission
+
+```
+python run.py                     # best model: regularized logistic on all features
+python run.py --features selected # the 21 hand-picked features
+python run.py --help              # all options
+```
+
+The default configuration is the best model found by `tune.py`
+(`reg_logistic(lambda=0.0001, gamma=0.5, iters=500)` on all features,
+5-fold CV F1 = 0.4290; see `results/cv_results.csv`). `run.py` preprocesses
+the data, chooses the decision threshold by stratified 5-fold cross-validation
+(maximizing the F1 score on the out-of-fold scores), retrains on the full
+training set and writes `submission.csv` in the AIcrowd format. The run is
+deterministic for a given `--seed`.
 
 ## Pipeline
 
