@@ -1,83 +1,65 @@
-# CS-433 Project 1 — Heart disease (MICHD) prediction
+# CS-433 Project 1 - Heart disease prediction
 
-Binary classification on the BRFSS 2015 survey: predict whether a respondent
-has coronary heart disease (MICHD) from ~320 health and lifestyle answers.
-Only Python, NumPy and matplotlib are used (no external ML libraries).
+We predict if a person has coronary heart disease (MICHD) from their answers
+to the 2015 BRFSS health survey. Only Python and NumPy are used
+(matplotlib only for the figure of the report).
 
-## Repository layout
+## Files
 
-| File | Content |
-|---|---|
-| `implementations.py` | The 6 required methods (MSE GD/SGD, least squares, ridge, logistic and regularized logistic regression) |
-| `helpers.py` | Course-provided CSV loading and submission writing |
-| `preprocessing.py` | Data loading with `.npy` cache, feature cleaning / one-hot encoding / standardization (`Preprocessor`), label conversion |
-| `cross_validation.py` | F1 / accuracy, F1-optimal threshold, stratified k-fold cross-validation |
-| `tune.py` | Hyperparameter search of all methods with 5-fold CV, results in `results/cv_results.csv` |
-| `gbdt.py` | Gradient-boosted decision trees in NumPy (histogram binning, logistic loss, early stopping) |
-| `run.py` | Reproduces our best submission (boosted trees) and writes `submission.csv`; `--cv` runs 5-fold CV |
-| `run_linear.py` | End-to-end pipeline with the linear methods (best: regularized logistic regression) |
-| `eda.ipynb` | Exploratory data analysis |
-| `test_implementations.py`, `test_pipeline.py` | Unit tests (`pytest`) |
-| `report/` | LaTeX template (IEEEtran) for the 2-page report |
-| `grading_tests/` | Course-provided public tests and `environment.yml` |
+- `implementations.py`: the 6 methods asked in the project
+- `helpers.py`: functions given by the course (load the csv, write the submission)
+- `preprocessing.py`: loads and cleans the data for the linear models
+- `cross_validation.py`: F1 score, best threshold and 5-fold cross-validation
+- `tune.py`: tries the 6 methods with different parameters
+- `gbdt.py`: our boosted trees model
+- `run.py`: makes our best submission (boosted trees)
+- `run_linear.py`: makes a submission with the linear models
+- `eda.ipynb`: first look at the data
+- `test_implementations.py`, `test_pipeline.py`: tests
+- `report/`: the report
 
-## Setup
+## How to run
 
-Put `x_train.csv`, `y_train.csv` and `x_test.csv` in `data/` (they are
-tracked with Git LFS: `git lfs pull`). The first data load parses the CSVs
-(~1 min) and caches them in `data/cache/`; later loads take seconds.
+Put `x_train.csv`, `y_train.csv` and `x_test.csv` in the `data/` folder.
+The first time, loading the csv files takes about 1 minute, then they are
+saved in `data/cache/` and loading is fast.
 
 ```
-python tune.py --features selected   # 21 hand-picked features
-python tune.py --features all        # all non-metadata features
+python run.py          # writes submission.csv (about 6 minutes)
+python run.py --cv     # 5-fold cross-validation of the boosted trees
+python run_linear.py   # submission with regularized logistic regression
+python tune.py         # compares the 6 methods
 pytest test_implementations.py test_pipeline.py
 ```
 
-## Reproducing the submission
+## What we did
 
-```
-python run.py        # boosted trees, writes submission.csv (~6 min)
-python run.py --cv   # 5-fold cross-validation of the same model (~30 min)
-```
+**Preprocessing (linear models)**, all statistics are computed on the training set:
+1. remove the survey metadata and columns with more than 80% missing values
+2. special codes: 88 / 888 / 555 mean "none" -> 0, 77 / 99 / 777 / 999 mean
+   "don't know" or "refused" -> missing
+3. columns with at most 15 values are one-hot encoded (missing is its own column)
+4. other columns: missing values replaced by the median, plus a column saying
+   if the value was missing, and extreme values are clipped
+5. remove columns that are linear combinations of others, standardize, add a bias
 
-Our best model is gradient-boosted trees (`gbdt.py`): depth-3 trees,
-learning rate 0.1, 50% row and column subsampling, early stopping on 10% of
-the training set. Every non-metadata column is cut into 64 bins (one bin
-holds the missing values), so the trees need no imputation or encoding.
-HAREHAB1 (cardiac rehabilitation) is excluded: it is only asked to people who
-had a heart attack, so it leaks the label. 5-fold CV F1 = 0.4357 +- 0.0028
-(accuracy 0.872 at the F1-optimal threshold). The threshold is chosen to
-maximize F1 on the early-stopping split.
+**Boosted trees**: each column is cut into 64 bins, missing values get their
+own bin. Trees of depth 3, learning rate 0.1, each tree uses half of the rows
+and half of the columns. We stop adding trees when the loss on 10% of the
+training set stops improving. The column HAREHAB1 is not used because it is
+only asked to people who had a heart attack (it gives the label away).
 
-The linear methods are run with `run_linear.py` (default:
-`reg_logistic(lambda=0.0001, gamma=0.5, iters=500)` on all features,
-5-fold CV F1 = 0.4290; see `results/cv_results.csv`). It preprocesses the
-data, chooses the threshold by stratified 5-fold cross-validation, retrains
-on the full training set and writes `submission.csv`.
+**Threshold**: only 8.8% of the people are sick, so we choose the threshold
+that gives the best F1 score instead of 0.5.
 
-```
-python run_linear.py                     # regularized logistic, all features
-python run_linear.py --features selected # the 21 hand-picked features
-python run_linear.py --help              # all options
-```
+**Cross-validation**: stratified 5-fold cross-validation (each fold has 8.8%
+of sick people), the same folds for every model.
 
-## Pipeline
+## Results (5-fold cross-validation)
 
-1. **Labels**: the data uses y in {-1, 1}; models are trained on {0, 1}
-   (`to_01`) and predictions are mapped back with `to_pm1` for submission.
-2. **Feature selection**: survey metadata (dates, sequence numbers, sampling
-   weights) and columns with more than 80% missing values are dropped.
-3. **Categorical features** (at most 15 distinct values) are one-hot encoded,
-   with the most frequent value as reference level. "Don't know" / "Refused"
-   codes and NaN become their own categories; categories seen in less than
-   0.5% of the training samples are merged into the reference.
-4. **Continuous features**: BRFSS codes are decoded (88 / 888 / 555 -> 0,
-   77 / 99 / 777 / 999 / ... -> missing), missing values are imputed with the
-   training median plus a missing indicator, values are clipped to the
-   [0.1%, 99.9%] training quantiles.
-5. Columns that are linear combinations of others are dropped (keeps
-   `tx^T tx` invertible), all features are standardized with training
-   statistics, and a bias column is added.
-6. **Evaluation**: stratified 5-fold CV. Because only 8.8% of samples are
-   positive, we report the F1 score, with the decision threshold chosen to
-   maximize F1 on the out-of-fold scores.
+| Model | F1 | Accuracy |
+|---|---|---|
+| Regularized logistic regression | 0.4290 | 0.877 |
+| Boosted trees (final) | 0.4357 | 0.872 |
+
+All results of `tune.py` are in `results/cv_results.csv`.
