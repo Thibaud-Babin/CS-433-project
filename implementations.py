@@ -1,7 +1,5 @@
 import numpy as np
 
-# Linear regression
-
 
 def compute_mse(y, tx, w):
     """Mean squared error loss (with the 1/2 factor)."""
@@ -35,7 +33,6 @@ def mean_squared_error_sgd(y, tx, initial_w, max_iters, gamma):
     """
     w = initial_w
     for i in range(max_iters):
-        # pick one random sample
         n = np.random.randint(len(y))
         y_n = y[n : n + 1]
         tx_n = tx[n : n + 1]
@@ -71,9 +68,6 @@ def ridge_regression(y, tx, lambda_):
     return w, loss
 
 
-# Logistic regression
-
-
 def compute_utilities(tx, w):
     """Score U = tx @ w of each sample."""
     return tx.dot(w)
@@ -82,8 +76,6 @@ def compute_utilities(tx, w):
 def compute_probabilities(tx, w):
     """Sigmoid of the scores, P(y = 1 | x)."""
     U = compute_utilities(tx, w)
-    # outside [-30, 30] the sigmoid is already 0 or 1, clipping avoids
-    # overflow in np.exp
     U = np.clip(U, -30, 30)
     return 1 / (1 + np.exp(-U))
 
@@ -91,8 +83,6 @@ def compute_probabilities(tx, w):
 def log_loss(y, tx, w):
     """Logistic loss (mean negative log-likelihood)."""
     U = compute_utilities(tx, w)
-    # -[y log(P) + (1 - y) log(1 - P)] simplifies to log(1 + exp(U)) - y * U
-    # np.logaddexp(0, U) computes log(1 + exp(U)) without overflow
     return np.mean(np.logaddexp(0, U) - y * U)
 
 
@@ -124,7 +114,6 @@ def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
     """
     w = initial_w
     for i in range(max_iters):
-        # the penalty lambda_ * ||w||^2 adds 2 * lambda_ * w to the gradient
         grad = log_loss_gradient(y, tx, w) + 2 * lambda_ * w
         w = w - gamma * grad
     loss = log_loss(y, tx, w)

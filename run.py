@@ -23,8 +23,6 @@ from gbdt import GBDT, apply_bins, fit_bin_edges
 from helpers import create_csv_submission
 from preprocessing import METADATA_COLUMNS, load_data, to_01, to_pm1
 
-# HAREHAB1 (cardiac rehabilitation) is only asked to people who had a heart
-# attack, so answering it almost gives the label: we do not use it
 EXCLUDED_COLUMNS = METADATA_COLUMNS + ["HAREHAB1"]
 
 PARAMS = {
@@ -61,7 +59,18 @@ def train(xb, y, seed):
     Returns the model and the F1-optimal threshold on the 10% split.
     """
     fit_idx, stop_idx = stratified_split(y, 0.1, seed)
-    model = GBDT(**PARAMS, seed=seed, verbose=100)
+    model = GBDT(
+        n_trees=PARAMS["n_trees"],
+        learning_rate=PARAMS["learning_rate"],
+        max_depth=PARAMS["max_depth"],
+        lam=PARAMS["lam"],
+        min_child_hess=PARAMS["min_child_hess"],
+        subsample=PARAMS["subsample"],
+        colsample=PARAMS["colsample"],
+        early_stopping=PARAMS["early_stopping"],
+        seed=seed,
+        verbose=100,
+    )
     model.fit(xb[fit_idx], y[fit_idx], xb[stop_idx], y[stop_idx])
     scores = model.decision_function(xb[stop_idx])
     threshold, f1 = best_threshold(y[stop_idx], scores)
@@ -82,7 +91,6 @@ def cross_validation(xb, y):
         model, _ = train(xb[train_idx], y[train_idx], seed=100 + k)
         scores[val_idx] = model.decision_function(xb[val_idx])
 
-    # F1-optimal threshold on all the out-of-fold scores
     threshold, f1 = best_threshold(y, scores)
     y_pred = scores >= threshold
     fold_f1 = []
@@ -115,7 +123,6 @@ def main():
         create_csv_submission(test_ids, to_pm1(y_pred), "submission.csv")
         print(f"predicted positive rate on the test set: {np.mean(y_pred):.3f}")
 
-        # most used features
         counts = model.split_counts(len(used))
         top = np.argsort(-counts)[:10]
         names = []

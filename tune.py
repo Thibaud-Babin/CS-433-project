@@ -25,8 +25,6 @@ def largest_eigenvalue(tx):
     to save time and memory."""
     sub = tx[::10].astype(np.float64)
     eigenvalues = np.linalg.eigvalsh(sub.T.dot(sub) / len(sub))
-    # a Python float (not numpy float64), otherwise w becomes float64 and the
-    # whole float32 matrix is converted at every gradient step
     return float(eigenvalues[-1])
 
 
@@ -111,9 +109,13 @@ def save_results(results, features, n_columns):
 def print_results(results):
     """Print the models sorted from best to worst F1 score."""
     names = list(results.keys())
-    names.sort(key=lambda name: results[name]["f1"], reverse=True)
-    print(f"{'model':<50} {'F1':>7} {'+/- std':>7} {'acc':>7} {'thresh':>8}")
+    f1s = []
     for name in names:
+        f1s.append(results[name]["f1"])
+    order = np.argsort(f1s)[::-1]
+    print(f"{'model':<50} {'F1':>7} {'+/- std':>7} {'acc':>7} {'thresh':>8}")
+    for i in order:
+        name = names[i]
         r = results[name]
         print(
             f"{name:<50} {r['f1']:7.4f} {r['fold_f1'].std():7.4f} "
@@ -128,7 +130,6 @@ def main():
     parser.add_argument("--seed", type=int, default=1)
     args = parser.parse_args()
 
-    # the seed is also used by mean_squared_error_sgd
     np.random.seed(args.seed)
 
     x_train, x_test, y_train, train_ids, test_ids, columns = load_data()

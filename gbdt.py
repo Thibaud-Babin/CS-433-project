@@ -17,9 +17,6 @@ N_BINS = 64
 NAN_BIN = N_BINS - 1
 
 
-# Binning
-
-
 def fit_bin_edges(x, columns):
     """Bin edges of each column, from the training data (labels not used).
 
@@ -35,7 +32,6 @@ def fit_bin_edges(x, columns):
             continue
         values = np.unique(col)
         if len(values) <= N_BINS - 1:
-            # one bin per value: edges halfway between consecutive values
             e = (values[:-1] + values[1:]) / 2
         else:
             q = np.linspace(0, 1, N_BINS)[1:-1]
@@ -54,9 +50,6 @@ def apply_bins(x, columns, edges):
         b[np.isnan(col)] = NAN_BIN
         out[:, k] = b
     return out
-
-
-# Trees
 
 
 def sigmoid(z):
@@ -95,7 +88,6 @@ def best_split(G, H, lam, min_child_hess):
     g_total = G[0].sum()
     h_total = H[0].sum()
     parent_score = g_total**2 / (h_total + lam)
-    # left child = value bins 0 .. t, for every possible threshold t
     g_left = np.cumsum(G[:, :-1], axis=1)
     h_left = np.cumsum(H[:, :-1], axis=1)
     g_nan = G[:, -1:]
@@ -111,7 +103,6 @@ def best_split(G, H, lam, min_child_hess):
         GR = g_total - GL
         HR = h_total - HL
         gain = GL**2 / (HL + lam) + GR**2 / (HR + lam) - parent_score
-        # children must not be too small
         gain[(HL < min_child_hess) | (HR < min_child_hess)] = -np.inf
         f, t = np.unravel_index(np.argmax(gain), gain.shape)
         if gain[f, t] > best[0]:
@@ -154,7 +145,6 @@ class Tree:
         """Leaf value of every row of the binned matrix xb."""
         node = np.zeros(xb.shape[0], dtype=int)
         rows = np.arange(xb.shape[0])
-        # all samples go down one level at each step
         for step in range(self.depth):
             f = self.feature_arr[node]
             is_leaf = f < 0
@@ -229,8 +219,6 @@ class GBDT:
         go_left = (bins <= t) | ((bins == NAN_BIN) & nan_left)
         left_rows = rows[go_left]
         right_rows = rows[~go_left]
-        # only build the histograms of the smaller child, the other one is
-        # the parent minus the smaller one
         if len(left_rows) <= len(right_rows):
             GL, HL = build_histograms(xt, features, left_rows, g, h)
             GR, HR = G - GL, H - HL
@@ -253,13 +241,11 @@ class GBDT:
         rng = np.random.default_rng(self.seed)
         n = xb.shape[0]
         n_features = xb.shape[1]
-        # start from the log-odds of the positive class
         p0 = np.mean(y)
         self.base = np.log(p0 / (1 - p0))
         raw = np.full(n, self.base)
         raw_val = np.full(len(y_val), self.base)
 
-        # transposed copy: each feature becomes a contiguous array
         xt = np.ascontiguousarray(xb.T)
         n_rows = int(round(self.subsample * n))
         n_cols = max(1, int(round(self.colsample * n_features)))
@@ -269,7 +255,6 @@ class GBDT:
         best_loss = np.inf
         best_n_trees = 0
         for i in range(self.n_trees):
-            # gradient and hessian of the logistic loss
             p = sigmoid(raw)
             g = p - y
             h = p * (1 - p)
@@ -290,7 +275,6 @@ class GBDT:
             if self.verbose and (i + 1) % self.verbose == 0:
                 print(f"  tree {i + 1}: validation loss {loss:.5f}", flush=True)
 
-        # keep the trees up to the best validation loss
         self.trees = self.trees[:best_n_trees]
         return self
 

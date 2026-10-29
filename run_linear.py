@@ -31,9 +31,6 @@ from cross_validation import build_k_indices, cross_validate, train_model
 from helpers import create_csv_submission
 from preprocessing import SELECTED_FEATURES, Preprocessor, load_data, to_01, to_pm1
 
-# Defaults of the best model found with `python tune.py`
-# (see results/cv_results.csv):
-#   reg_logistic(lambda=0.0001, gamma=0.5, iters=500) on all features -> F1 = 0.4290.
 DEFAULT_LAMBDA = 1e-4
 DEFAULT_GAMMA = 0.5
 DEFAULT_MAX_ITERS = 500
@@ -59,13 +56,11 @@ def run_pipeline(
     out-of-fold F1 score and the threshold that maximizes it, both obtained
     with a stratified k-fold cross-validation.
     """
-    # Learn every preprocessing statistic on the training set only.
     preprocessor = Preprocessor(features=features)
     tx_train = preprocessor.fit_transform(x_train, columns)
     tx_test = preprocessor.transform(x_test)
-    y = to_01(y_train)  # the methods are trained on labels in {0, 1}
+    y = to_01(y_train)
 
-    # Threshold and honest F1 estimate from out-of-fold predictions.
     k_indices = build_k_indices(y, folds, seed)
     results = cross_validate(tx_train, y, k_indices, [model])
     if model["name"] not in results:
@@ -73,7 +68,6 @@ def run_pipeline(
     threshold = results[model["name"]]["threshold"]
     cv_f1 = results[model["name"]]["f1"]
 
-    # Retrain on the full training set with the same hyperparameters.
     w, _ = train_model(model, y, tx_train)
 
     scores = tx_test.dot(w)
@@ -147,10 +141,13 @@ def main():
     )
     args = parser.parse_args()
 
-    np.random.seed(args.seed)  # only used by mean_squared_error_sgd
+    np.random.seed(args.seed)
 
     x_train, x_test, y_train, _, test_ids, columns = load_data(args.data_dir)
-    features = SELECTED_FEATURES if args.features == "selected" else None
+    if args.features == "selected":
+        features = SELECTED_FEATURES
+    else:
+        features = None
     model = build_model(args)
 
     y_pred, cv_f1, threshold = run_pipeline(

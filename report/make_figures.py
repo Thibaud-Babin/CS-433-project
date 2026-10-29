@@ -17,12 +17,10 @@ import sys
 
 import matplotlib
 
-matplotlib.use("Agg")  # no display needed, just write a PNG
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-# The repo root is the parent of this script's folder; add it so we can import
-# the project modules no matter where the script is run from.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -30,7 +28,6 @@ if ROOT not in sys.path:
 from cross_validation import best_threshold, build_k_indices, cross_validate, f1_score
 from preprocessing import Preprocessor, load_data, to_01
 
-# Best model found by ``python tune.py --features all`` (see results/cv_results.csv).
 BEST_MODEL = {
     "name": "reg_logistic(lambda=1e-4,gamma=0.5,iters=500)",
     "method": "reg_logistic",
@@ -49,7 +46,7 @@ def f1_curve(y_true, scores):
     This is the same sweep used by ``cross_validation.best_threshold``, but it
     keeps every (threshold, F1) pair so the full curve can be plotted.
     """
-    order = np.argsort(-scores)  # descending scores
+    order = np.argsort(-scores)
     sorted_scores = scores[order]
     sorted_y = y_true[order]
     n_positives = int(np.sum(y_true == 1))
@@ -60,7 +57,6 @@ def f1_curve(y_true, scores):
     for i in range(len(sorted_scores)):
         if sorted_y[i] == 1:
             tp += 1
-        # F1 only changes when the threshold crosses a new distinct score value
         if i + 1 < len(sorted_scores) and sorted_scores[i + 1] == sorted_scores[i]:
             continue
         n_predicted = i + 1
@@ -70,10 +66,10 @@ def f1_curve(y_true, scores):
 
 
 def main():
-    np.random.seed(SEED)  # only used by SGD, kept for consistency with run.py
+    np.random.seed(SEED)
 
     x_train, _, y_train, _, _, columns = load_data()
-    preprocessor = Preprocessor(features=None)  # None = all non-metadata features
+    preprocessor = Preprocessor(features=None)
     tx = preprocessor.fit_transform(x_train, columns)
     y = to_01(y_train)
     print(f"tx shape: {tx.shape}, positive rate: {y.mean():.4f}")
@@ -89,7 +85,6 @@ def main():
 
     t, f1 = f1_curve(y, scores)
 
-    # Down-sample the curve for a lightweight plot while keeping its shape.
     step = max(1, len(t) // 2500)
     t_plot = t[::step]
     f1_plot = f1[::step]
@@ -119,7 +114,9 @@ def main():
     ax.legend(fontsize=7, loc="upper right")
     fig.tight_layout()
 
-    out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fig_threshold.png")
+    out_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "fig_threshold.png"
+    )
     fig.savefig(out_path, dpi=200, bbox_inches="tight")
     print(f"wrote {out_path}")
 

@@ -79,7 +79,6 @@ def train_model(model, y, tx):
     """Train one model described by a dict (see tune.py) and return (w, loss)."""
     method = model["method"]
     n_features = tx.shape[1]
-    # float32 initial weights keep the computations in float32 (less memory)
     initial_w = np.zeros(n_features, dtype=np.float32)
 
     if method == "least_squares":
@@ -124,7 +123,6 @@ def cross_validate(tx, y, k_indices, models, verbose=True):
 
     for k in range(len(k_indices)):
         val_idx = k_indices[k]
-        # the training set is every sample that is not in fold k
         is_train = np.ones(n, dtype=bool)
         is_train[val_idx] = False
         tx_train = tx[is_train]
@@ -138,7 +136,6 @@ def cross_validate(tx, y, k_indices, models, verbose=True):
             try:
                 w, loss = train_model(model, y_train, tx_train)
             except np.linalg.LinAlgError as error:
-                # e.g. least squares when tx^T tx is singular
                 print("  " + name + " failed (" + str(error) + "), skipping it")
                 failed.append(name)
                 continue

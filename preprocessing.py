@@ -41,13 +41,44 @@ SELECTED_FEATURES = [
 
 
 METADATA_COLUMNS = [
-    "_STATE", "FMONTH", "IDATE", "IMONTH", "IDAY", "IYEAR", "DISPCODE",
-    "SEQNO", "_PSU", "CTELENUM", "PVTRESD1", "COLGHOUS", "STATERES",
-    "CELLFON3", "LADULT", "CTELNUM1", "CELLFON2", "CADULT", "PVTRESD2",
-    "CCLGHOUS", "CSTATE", "LANDLINE", "QSTVER", "QSTLANG", "MSCODE",
-    "_STSTR", "_STRWT", "_RAWRAKE", "_WT2RAKE", "_CLLCPWT", "_DUALCOR",
-    "_DUALUSE", "_LLCPWT", "_IMPRACE", "_CHISPNC", "_CRACE1", "_CPRACE",
-]  # fmt: skip
+    "_STATE",
+    "FMONTH",
+    "IDATE",
+    "IMONTH",
+    "IDAY",
+    "IYEAR",
+    "DISPCODE",
+    "SEQNO",
+    "_PSU",
+    "CTELENUM",
+    "PVTRESD1",
+    "COLGHOUS",
+    "STATERES",
+    "CELLFON3",
+    "LADULT",
+    "CTELNUM1",
+    "CELLFON2",
+    "CADULT",
+    "PVTRESD2",
+    "CCLGHOUS",
+    "CSTATE",
+    "LANDLINE",
+    "QSTVER",
+    "QSTLANG",
+    "MSCODE",
+    "_STSTR",
+    "_STRWT",
+    "_RAWRAKE",
+    "_WT2RAKE",
+    "_CLLCPWT",
+    "_DUALCOR",
+    "_DUALUSE",
+    "_LLCPWT",
+    "_IMPRACE",
+    "_CHISPNC",
+    "_CRACE1",
+    "_CPRACE",
+]
 
 CACHE_NAMES = ["x_train", "x_test", "y_train", "train_ids", "test_ids"]
 
@@ -77,14 +108,12 @@ def load_data(data_dir="data"):
         for i in range(len(paths)):
             np.save(paths[i], arrays[i])
 
-    # mmap_mode="r" reads the big matrices from disk only when needed
     x_train = np.load(paths[0], mmap_mode="r")
     x_test = np.load(paths[1], mmap_mode="r")
     y_train = np.load(paths[2])
     train_ids = np.load(paths[3])
     test_ids = np.load(paths[4])
 
-    # column names from the csv header (load_csv_data removes the Id column)
     with open(os.path.join(data_dir, "x_train.csv")) as f:
         header = f.readline().strip().split(",")
     columns = []
@@ -127,12 +156,10 @@ def clean_sentinels(col, col_max=None):
             return col
         col_max = np.nanmax(col)
 
-    # alcohol columns use 900 or 99900 for "unknown"
     if col_max == 900 or col_max == 99900:
         col[col == col_max] = np.nan
         return col
 
-    # no special codes if the max is not an integer >= 77
     if col_max != int(col_max) or col_max < 77:
         return col
 
@@ -140,15 +167,12 @@ def clean_sentinels(col, col_max=None):
     dont_know = repeated_digit(7, n_digits)
     refused = repeated_digit(9, n_digits)
     none = repeated_digit(8, n_digits)
-    # if the max is not 77.. or 99.., the column has no special codes
     if col_max != dont_know and col_max != refused:
         return col
 
     col[col == dont_know] = np.nan
     col[col == refused] = np.nan
     col[col == none] = 0
-    # 555 = "never" in the 3 digit food questions (in 2 digit questions 55
-    # can be a real value, like an age)
     if n_digits == 3:
         col[col == 555] = 0
     return col
@@ -175,17 +199,13 @@ def find_collinear_columns(z, tol=1e-7):
     for start in range(0, n_rows, chunk_size):
         chunk = z[start : start + chunk_size].astype(np.float64)
         squared_norms += np.sum(chunk**2, axis=0)
-        # mode="r" only computes R (we do not need Q)
         R = np.asarray(np.linalg.qr(np.vstack([R, chunk]), mode="r"))
 
     keep = np.ones(n_cols, dtype=bool)
     for j in range(n_cols):
-        # with fewer rows than columns, R has only n_rows rows and the last
-        # columns are always combinations of the previous ones
         if squared_norms[j] == 0 or j >= R.shape[0]:
             keep[j] = False
             continue
-        # fraction of column j not explained by the previous columns
         residual = R[j, j] ** 2 / squared_norms[j]
         if residual <= tol:
             keep[j] = False
@@ -234,7 +254,6 @@ class Preprocessor:
             names = list(self.features)
         min_count = self.min_category_frac * x.shape[0]
 
-        # one spec (dict) per raw column, saying how to turn it into features
         self.specs_ = []
         self.feature_names_ = ["bias"]
         for name in names:
@@ -246,9 +265,6 @@ class Preprocessor:
             values, counts = np.unique(raw[~is_nan], return_counts=True)
 
             if len(values) <= self.max_categories:
-                # categorical column: one-hot encoding of the frequent values.
-                # The most frequent value is left out (reference level),
-                # otherwise the one-hot columns would sum to the bias column
                 reference = values[np.argmax(counts)]
                 levels = []
                 for i in range(len(values)):
@@ -263,7 +279,6 @@ class Preprocessor:
                 for v in levels:
                     self.feature_names_.append(f"{name}=={v:g}")
             else:
-                # continuous column
                 col_max = np.max(values)
                 clean = clean_sentinels(raw, col_max)
                 missing = np.isnan(clean)
@@ -283,17 +298,14 @@ class Preprocessor:
                 self.feature_names_.append(f"{name}==NaN")
             self.specs_.append(spec)
 
-        # build every candidate feature, then remove the collinear ones
         self.keep_ = np.ones(len(self.feature_names_), dtype=bool)
         z = self._build(x)
         self.keep_ = find_collinear_columns(z)
 
-        # mean and std of the kept features (column 0 is the bias)
         kept = self.keep_[1:]
         mean = z[:, 1:].mean(axis=0, dtype=np.float64)[kept]
         std = z[:, 1:].std(axis=0, dtype=np.float64)[kept]
         self.mean_ = mean.astype(np.float32)
-        # constant columns: divide by 1 instead of 0
         std[std == 0] = 1
         self.std_ = std.astype(np.float32)
 
@@ -309,13 +321,12 @@ class Preprocessor:
         columns marked in self.keep_."""
         out = np.empty((x.shape[0], np.sum(self.keep_)), dtype=np.float32)
         out[:, 0] = 1
-        candidate = 1  # index among all candidate features
-        col = 1  # index of the next column of out to fill
+        candidate = 1
+        col = 1
 
         for spec in self.specs_:
             raw = np.array(x[:, spec["index"]], dtype=np.float64)
 
-            # the new features made from this raw column
             new_features = []
             if spec["kind"] == "categorical":
                 for level in spec["levels"]:
