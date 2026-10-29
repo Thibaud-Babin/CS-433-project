@@ -1,14 +1,3 @@
-"""Data loading and preprocessing for the BRFSS heart disease dataset.
-
-Steps (all statistics are learned on the training set only):
-1. drop survey metadata columns and columns with too many NaN
-2. columns with few distinct values are one-hot encoded
-3. the other columns are cleaned (special BRFSS codes), NaN are replaced by
-   the median and outliers are clipped
-4. collinear columns are removed, then everything is standardized and a
-   bias column of ones is added
-"""
-
 import os
 
 import numpy as np
@@ -84,14 +73,6 @@ CACHE_NAMES = ["x_train", "x_test", "y_train", "train_ids", "test_ids"]
 
 
 def load_data(data_dir="data"):
-    """Load the dataset.
-
-    Reading the csv files is slow (a few minutes), so the first time we save
-    the arrays as .npy files in data/cache/ and load those the next times.
-
-    Returns x_train, x_test, y_train (in {-1, 1}), train_ids, test_ids and
-    the list of column names.
-    """
     cache_dir = os.path.join(data_dir, "cache")
     paths = []
     for name in CACHE_NAMES:
@@ -123,33 +104,20 @@ def load_data(data_dir="data"):
 
 
 def to_01(y):
-    """Convert labels from {-1, 1} to {0, 1}."""
     y = np.array(y)
     return ((y + 1) / 2).astype(np.float32)
 
 
 def to_pm1(y):
-    """Convert labels from {0, 1} (or booleans) to {-1, 1} for the submission."""
     y = np.array(y, dtype=int)
     return 2 * y - 1
 
 
 def repeated_digit(digit, n_digits):
-    """Number made of n_digits times the same digit, e.g. (7, 3) -> 777."""
     return int(str(digit) * n_digits)
 
 
 def clean_sentinels(col, col_max=None):
-    """Replace the special BRFSS codes of a continuous column.
-
-    BRFSS uses repeated digits for special answers, e.g. for a 2 digit
-    question: 77 = don't know, 99 = refused (-> NaN) and 88 = none (-> 0).
-    The number of digits is found from the largest value of the column.
-    For the test set, col_max must be the max of the training column, so
-    that both sets are cleaned the same way.
-
-    Returns a cleaned copy of the column.
-    """
     col = np.array(col, dtype=np.float64)
     if col_max is None:
         if np.all(np.isnan(col)):
@@ -179,18 +147,6 @@ def clean_sentinels(col, col_max=None):
 
 
 def find_collinear_columns(z, tol=1e-7):
-    """Find the columns of z that are (almost) a linear combination of the
-    columns before them. They make tx^T tx singular, which breaks least
-    squares (e.g. two questions skipped by the same people give the same
-    NaN indicator).
-
-    We use the QR decomposition z = QR: R[j, j]^2 is the squared norm of the
-    part of column j that is not explained by the columns before it. z is
-    too big for memory in float64, so R is computed chunk by chunk:
-    the R of [R_previous; next chunk] is the R of all rows seen so far.
-
-    Returns a boolean array, True for the columns to keep.
-    """
     n_rows = z.shape[0]
     n_cols = z.shape[1]
     R = np.zeros((0, n_cols))
@@ -213,20 +169,6 @@ def find_collinear_columns(z, tol=1e-7):
 
 
 class Preprocessor:
-    """Learns the preprocessing on the training set (fit) and applies it to
-    any data (transform).
-
-    Parameters:
-        features: list of columns to use, or None for all columns except
-            METADATA_COLUMNS
-        max_nan_frac: columns with more NaN than this fraction are dropped
-        max_categories: columns with at most this many distinct values are
-            one-hot encoded
-        min_category_frac: categories (and NaN indicators) are only kept if
-            at least this fraction of the samples has them
-        clip_quantile: continuous columns are clipped to the
-            [q, 1 - q] quantiles of the training set
-    """
 
     def __init__(
         self,
@@ -243,8 +185,6 @@ class Preprocessor:
         self.clip_quantile = clip_quantile
 
     def fit(self, x, columns):
-        """Learn the features to build and their statistics from the
-        training data x (columns = list of column names of x)."""
         if self.features is None:
             names = []
             for c in columns:
@@ -317,8 +257,6 @@ class Preprocessor:
         return self
 
     def _build(self, x):
-        """Build the feature matrix (not standardized yet) with only the
-        columns marked in self.keep_."""
         out = np.empty((x.shape[0], np.sum(self.keep_)), dtype=np.float32)
         out[:, 0] = 1
         candidate = 1
@@ -349,16 +287,11 @@ class Preprocessor:
         return out
 
     def transform(self, x):
-        """Apply the learned preprocessing to x (train or test data).
-
-        Returns a float32 matrix: bias column + standardized features.
-        """
         out = self._build(x)
         out[:, 1:] -= self.mean_
         out[:, 1:] /= self.std_
         return out
 
     def fit_transform(self, x, columns):
-        """Fit on x, then transform x."""
         self.fit(x, columns)
         return self.transform(x)

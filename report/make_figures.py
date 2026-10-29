@@ -1,17 +1,3 @@
-"""Generate the report figure: F1 score vs. decision threshold for the best model.
-
-Reproduces the out-of-fold scores of the best model found by ``tune.py``
-(``reg_logistic(lambda=1e-4, gamma=0.5, max_iters=500)`` on *all* features) and
-plots the F1 score as a function of the decision threshold, marking the
-F1-optimal threshold.
-
-Only NumPy and matplotlib are used (both allowed for Project 1; matplotlib is
-used for visualization only).
-
-Run from the repository root:
-    python report/make_figures.py
-"""
-
 import os
 import sys
 
@@ -41,11 +27,6 @@ SEED = 1
 
 
 def f1_curve(y_true, scores):
-    """Exact piecewise-constant F1-vs-threshold curve.
-
-    This is the same sweep used by ``cross_validation.best_threshold``, but it
-    keeps every (threshold, F1) pair so the full curve can be plotted.
-    """
     order = np.argsort(-scores)
     sorted_scores = scores[order]
     sorted_y = y_true[order]

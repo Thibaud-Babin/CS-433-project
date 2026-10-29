@@ -7,7 +7,7 @@
 
 \begin{document}
 
-\title{Predicting Coronary Heart Disease from BRFSS Survey Data}
+\title{Project 1 Report: Heart Disease Prediction from the BRFSS Survey}
 
 \author{
   \IEEEauthorblockN{Sacha Luca Magnollay\IEEEauthorrefmark{1},
@@ -22,42 +22,45 @@
 
 \maketitle
 
-\begin{abstract}
-Early identification of individuals at risk of coronary heart disease is a valuable public-health goal. We build a binary classifier over the 2015 Behavioral Risk Factor Surveillance System (BRFSS) survey, predicting whether a respondent reports a diagnosed heart attack from 321 self-reported health and lifestyle questions. We implement six linear methods from scratch in NumPy, design a preprocessing pipeline (one-hot encoding, imputation, clipping, standardization), and select the decision threshold by maximizing the F1 score on out-of-fold predictions---a step made necessary by the $8.8\%$ positive class. The best model, regularized logistic regression trained on all features, reaches a five-fold cross-validated F1 score of $0.4290$, nearly doubling the F1 obtained with the default threshold.
-\end{abstract}
+\section*{Summary}
+We had to predict whether a person has coronary heart disease from their answers to the 2015 BRFSS health survey. We first implemented the six required linear methods in NumPy, cleaned the survey answers and chose the decision threshold that maximizes the F1 score. The best linear model, regularized logistic regression, reached a cross-validated F1 of $0.4290$. We then implemented gradient-boosted decision trees, which reached $0.4357$ and are used for our final submission.
 
-\section{Introduction}
-The task is a supervised binary classification problem: given the answers of a respondent to the 2015 BRFSS survey \cite{brfss2015}, predict the \texttt{MICHD} variable, which records whether the respondent has been diagnosed with coronary heart disease (myocardial infarction). The training set contains 328{,}135 samples described by 321 raw features and the test set 109{,}379 samples. Only $8.83\%$ of the training labels are positive, so accuracy is misleading---a trivial all-negative classifier scores $91\%$---and the task is evaluated with the F1 score, which balances precision and recall on the positive class.
+\section{Task and Data}
+Each sample is one survey respondent described by 321 answers, and the label (\texttt{MICHD}) says whether they were diagnosed with coronary heart disease \cite{brfss2015}. The training set has 328{,}135 samples and the test set 109{,}379. Only $8.8\%$ of the training labels are positive, so predicting ``healthy'' for everyone already gives $91\%$ accuracy. For this reason we focus on the F1 score of the positive class. All results below come from stratified 5-fold cross-validation, with the same folds for every model.
 
-Our contributions are (i) a NumPy-only implementation of six linear models, (ii) a preprocessing pipeline that turns raw survey answers into a standardized design matrix, and (iii) a threshold-selection procedure that maximizes F1 on out-of-fold predictions. We validate every choice with stratified five-fold cross-validation and report an ablation of the most impactful decisions.
+\section{Preprocessing (Linear Models)}
+We applied the following steps, with every statistic computed on the training set only:
+\begin{enumerate}
+\item drop survey metadata (dates, weights, sequence numbers) and columns with more than $80\%$ missing values;
+\item decode the special BRFSS codes: 88, 888 and 555 mean ``none'' ($\rightarrow 0$), 77, 99, 777 and 999 mean ``don't know'' or ``refused'' ($\rightarrow$ missing);
+\item one-hot encode columns with at most 15 distinct values, with missing as its own category;
+\item for the other columns, replace missing values by the median, add a missing indicator and clip to the $0.1\%$--$99.9\%$ quantiles;
+\item remove columns that are linear combinations of others, standardize and add a bias column.
+\end{enumerate}
+This gives 371 features. We also tried a smaller set of 21 hand-picked risk factors \cite{xie2019building, teboulheart}.
 
-\section{Data and Preprocessing}
-The BRFSS 2015 data \cite{brfss2015} mixes continuous answers (BMI, age) and categorical answers (smoking status, income bracket) with survey metadata (weights, dates, sequence numbers). We drop all metadata and any column with more than $80\%$ missing values. BRFSS sentinel codes are decoded: values such as 88, 888 and 555 (``no such value'') and 77, 99, 777 and 999 (``don't know''/``refused'') are treated as missing. Columns with at most 15 distinct values are one-hot encoded (most frequent level as reference, rare categories merged into it, missing as its own indicator); continuous features are imputed with the training median, receive a missingness indicator, and are clipped to the $0.1\%$--$99.9\%$ training quantiles. Columns that are linear combinations of others are removed, all features are standardized to zero mean and unit variance using training statistics, and a bias column is appended. Labels are mapped from $\{-1,+1\}$ to $\{0,1\}$. The full pipeline yields 371 features.
+\section{Models}
+\textbf{Linear models.} We implemented least squares and ridge regression (normal equations), linear regression with gradient descent and SGD, and logistic regression with and without $\ell_2$ penalty. We tuned the hyperparameters on a small grid. The best one is regularized logistic regression ($\lambda=10^{-4}$, $\gamma=0.5$, 500 iterations).
 
-As an ablation, we also consider a hand-picked set of 21 interpretable features (64 columns after one-hot encoding) motivated by the diabetes risk factors identified by Xie et al.\ \cite{xie2019building} and curated for this heart-disease task by Teboul \cite{teboulheart}.
+\textbf{Gradient-boosted trees.} Linear models cannot combine features (e.g.\ ``old \emph{and} diabetic''), and trees usually work better on tabular data \cite{grinsztajn2022tree}. We therefore wrote our own gradient boosting in NumPy, in the style of XGBoost \cite{chen2016xgboost}. Each raw column is cut into 64 bins and missing values get their own bin, so this model needs none of the preprocessing above. We add trees of depth 3 one by one (learning rate 0.1), each trained on a random half of the rows and columns, and stop when the loss on a held-out $10\%$ of the training set stops improving. We removed the column \texttt{HAREHAB1} (cardiac rehabilitation): it is only asked to people who had a heart attack, so it gives away the label.
 
-\section{Methods}
-We implement the six linear methods from scratch using only NumPy: least squares and ridge regression via the normal equations, linear regression with gradient descent and stochastic gradient descent, and logistic regression with and without $\ell_2$ regularization, trained by gradient descent on the logistic loss. Hyperparameters---regularization strength, step size and iteration count---are selected on a small grid with five-fold cross-validation; the best configuration is regularized logistic regression with $\lambda=10^{-4}$, step size $\gamma=0.5$ and 500 iterations.
-
-Because the positive class is rare, thresholding scores at zero (probability 0.5) is suboptimal. For every model we compute out-of-fold scores with stratified five-fold cross-validation (seed 1) and choose the threshold that maximizes F1 on those scores. The same folds are used for all models, so comparisons are paired.
+\textbf{Decision threshold.} With so few positives, the default threshold (probability 0.5) predicts almost nobody as sick. For each model we choose the threshold that gives the best F1 on the cross-validation predictions.
 
 \section{Results}
-The best model, regularized logistic regression ($\lambda=10^{-4}$, $\gamma=0.5$, 500 iterations) trained on all features, reaches a five-fold cross-validated F1 of $0.4290$ ($\pm0.0042$) with $0.8768$ accuracy and an F1-optimal threshold of $-1.3153$.
+Table~\ref{tab:models} shows the results. The boosted trees get the best F1, $0.4357$ ($\pm0.0028$ between folds), against $0.4290$ for regularized logistic regression. The features they use the most are general health, stroke, age, sex and diabetes. The linear models are all between $0.419$ and $0.429$, except SGD, which converges slowly.
 
-Figure~\ref{fig:threshold} shows F1 as a function of the decision threshold. The curve is strongly peaked: the naive threshold $t=0$ gives F1 $0.233$, whereas the optimum $t\approx-1.315$---predicting the positive class more often---gives $0.4290$. For imbalanced data the threshold is therefore a first-order hyperparameter.
-
-Table~\ref{tab:models} compares representative models trained on all features. All well-behaved linear models cluster in a narrow band (F1 $0.419$--$0.429$), consistent with a weak, largely linear signal; SGD is the exception, converging slowly and noisily. Ablations: (i) using all 371 features instead of the selected 64-column subset raises F1 from $0.4125$ to $0.4290$, the single largest gain; (ii) $\ell_2$ regularization is nearly neutral ($0.4288$ to $0.4290$) but stabilizes the loss; and (iii) optimizing the threshold raises F1 from $0.233$ to $0.4290$.
+The two choices that helped the most were using all features instead of the 21 selected ones ($0.4125 \rightarrow 0.4290$) and choosing the threshold (Figure~\ref{fig:threshold}): with the default threshold, F1 is only $0.233$.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{fig_threshold.png}
-\caption{F1 score as a function of the decision threshold $t$ for the best model (regularized logistic regression on all features). The red dot marks the F1-optimal threshold ($t\approx-1.315$, F1 $=0.4290$); the dashed line marks the naive threshold $t=0$ (F1 $=0.233$).}
+\caption{F1 as a function of the decision threshold $t$ for regularized logistic regression. Red dot: best threshold ($t\approx-1.315$, F1 $=0.4290$); dashed line: default $t=0$ (F1 $=0.233$).}
 \label{fig:threshold}
 \end{figure}
 
 \begin{table}[t]
 \centering
-\caption{Five-fold cross-validated results of representative models trained on all features, with the F1-optimal threshold applied to the out-of-fold scores. Ridge uses $\lambda{=}10^{-3}$; logistic methods use $\gamma{=}0.5$ and 500 iterations; regularized logistic adds $\lambda{=}10^{-4}$.}
+\caption{5-fold cross-validation results on all features, each with its best threshold. Ridge: $\lambda{=}10^{-3}$; logistic: $\gamma{=}0.5$, 500 iterations; reg.\ logistic: $\lambda{=}10^{-4}$.}
 \label{tab:models}
 \begin{tabular}{lccc}
 \toprule
@@ -68,16 +71,19 @@ Ridge & 0.4199 & 0.8644 & 0.214 \\
 Linear reg.\ (GD) & 0.4187 & 0.8730 & 0.225 \\
 Linear reg.\ (SGD) & 0.3168 & 0.8252 & 0.254 \\
 Logistic reg. & 0.4288 & 0.8736 & $-1.361$ \\
-Reg.\ logistic & \textbf{0.4290} & \textbf{0.8768} & $-1.315$ \\
+Reg.\ logistic & 0.4290 & 0.8768 & $-1.315$ \\
+Boosted trees & \textbf{0.4357} & 0.8722 & $-1.24$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\section{Discussion and Conclusion}
-Regularized logistic regression on all features with an F1-optimized threshold reaches a five-fold cross-validated F1 of $0.4290$ on a noisy, self-reported survey where the linear baselines lie close to one another. The analysis shows that feature breadth and threshold selection matter more than the choice among linear models, consistent with the advice that data and evaluation often dominate the learner \cite{domingos2012few}. All results are reproducible: \texttt{python run.py} retrains the reported model and writes the AIcrowd submission. A limitation is that linear models cannot capture feature interactions; in the follow-up project we plan to explore non-linear and ensemble methods.
+\section{What Did Not Work}
+We tried several ways to improve the trees, but none changed F1 by more than the noise between folds ($\pm0.003$): extra hand-made features (risk-factor counts, target encoding), a smaller learning rate, more bins, other models (additive models, random forests) and averaging several models (best $0.4373$). All these models make the same mistakes: their predictions are $95$--$99\%$ correlated. Keeping \texttt{HAREHAB1} would have given $0.444$, but only by leaking the label.
+
+\section{Conclusion}
+Our final model, gradient-boosted trees with a tuned threshold, reaches a cross-validated F1 of $0.4357$. As often in practice \cite{domingos2012few}, using all the data and choosing the threshold mattered more than the choice of model. Since many different attempts all stay around $0.436$, we think this is close to what can be predicted from these survey answers. \texttt{python run.py} reproduces our submission and \texttt{python run\_linear.py} the linear results.
 
 \bibliographystyle{IEEEtran}
 \bibliography{literature}
 
 \end{document}
-

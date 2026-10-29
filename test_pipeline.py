@@ -1,5 +1,3 @@
-"""Tests for preprocessing.py and cross_validation.py (run with pytest)."""
-
 import numpy as np
 import pytest
 

@@ -1,18 +1,3 @@
-"""Reproduce our best submission: gradient-boosted trees (gbdt.py).
-
-Usage:
-    python run.py          # train on the training set, write submission.csv
-    python run.py --cv     # 5-fold cross-validation of the same model
-
-Steps:
-1. load the raw data and cut every non-metadata column into 64 bins
-   (bin edges from the training set only, labels are not used)
-2. train the trees on 90% of the training set, with early stopping on the
-   other 10%
-3. choose the threshold that maximizes the F1 score on that 10% split
-4. predict the test set and write the submission
-"""
-
 import sys
 import time
 
@@ -38,8 +23,6 @@ PARAMS = {
 
 
 def stratified_split(y, frac, seed):
-    """Split the indices of y into (a, b), b being a random fraction frac of
-    the samples with the same ratio of positives."""
     rng = np.random.default_rng(seed)
     b = []
     for label in [0, 1]:
@@ -54,10 +37,6 @@ def stratified_split(y, frac, seed):
 
 
 def train(xb, y, seed):
-    """Train the trees with early stopping on 10% of (xb, y).
-
-    Returns the model and the F1-optimal threshold on the 10% split.
-    """
     fit_idx, stop_idx = stratified_split(y, 0.1, seed)
     model = GBDT(
         n_trees=PARAMS["n_trees"],
@@ -79,7 +58,6 @@ def train(xb, y, seed):
 
 
 def cross_validation(xb, y):
-    """5-fold stratified cross-validation (same folds as tune.py)."""
     k_indices = build_k_indices(y, 5, 1)
     scores = np.zeros(len(y))
     for k in range(len(k_indices)):

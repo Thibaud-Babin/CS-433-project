@@ -1,12 +1,3 @@
-"""Hyperparameter search with stratified k-fold cross-validation.
-
-Usage:
-    python tune.py --features selected   # the 21 hand-picked features
-    python tune.py --features all        # every non-metadata feature
-
-One line per model is added to results/cv_results.csv.
-"""
-
 import argparse
 import csv
 import os
@@ -21,21 +12,12 @@ RESULTS_PATH = os.path.join("results", "cv_results.csv")
 
 
 def largest_eigenvalue(tx):
-    """Largest eigenvalue of tx^T tx / N, computed on every 10th sample
-    to save time and memory."""
     sub = tx[::10].astype(np.float64)
     eigenvalues = np.linalg.eigvalsh(sub.T.dot(sub) / len(sub))
     return float(eigenvalues[-1])
 
 
 def make_models(tx):
-    """List of the models (method + hyperparameters) to evaluate.
-
-    MSE gradient descent converges for gamma < 2 / L (L = largest eigenvalue),
-    so we use gamma = 1 / L. For logistic regression on standardized
-    features, GD diverged for gamma >= 1 and converged in ~500 iterations
-    for gamma = 0.5 on one fold.
-    """
     gamma_mse = 1 / largest_eigenvalue(tx)
     models = []
 
@@ -86,7 +68,6 @@ def make_models(tx):
 
 
 def save_results(results, features, n_columns):
-    """Add one line per model to the results csv file."""
     os.makedirs("results", exist_ok=True)
     write_header = not os.path.exists(RESULTS_PATH)
     with open(RESULTS_PATH, "a", newline="") as f:
@@ -107,7 +88,6 @@ def save_results(results, features, n_columns):
 
 
 def print_results(results):
-    """Print the models sorted from best to worst F1 score."""
     names = list(results.keys())
     f1s = []
     for name in names:

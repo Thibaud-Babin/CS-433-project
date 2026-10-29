@@ -1,16 +1,3 @@
-"""Gradient-boosted decision trees for binary classification, in numpy.
-
-The raw survey columns are first cut into at most 64 bins (uint8):
-bins 0 .. 62 hold the values (quantile bins) and bin 63 holds the NaN.
-Trees split on "bin <= t" and learn on which side the NaN rows go, so the
-special BRFSS codes and the missing values need no cleaning.
-
-Training uses the logistic loss with second-order (Newton) steps, like
-XGBoost / LightGBM. For a node with gradient sum G and hessian sum H:
-    leaf value = -G / (H + lam)
-    split gain = GL^2 / (HL + lam) + GR^2 / (HR + lam) - G^2 / (H + lam)
-"""
-
 import numpy as np
 
 N_BINS = 64
@@ -18,11 +5,6 @@ NAN_BIN = N_BINS - 1
 
 
 def fit_bin_edges(x, columns):
-    """Bin edges of each column, from the training data (labels not used).
-
-    Columns with at most 63 distinct values get one bin per value, the
-    others get 63 quantile bins.
-    """
     edges = []
     for j in columns:
         col = np.array(x[:, j], dtype=np.float64)
@@ -41,8 +23,6 @@ def fit_bin_edges(x, columns):
 
 
 def apply_bins(x, columns, edges):
-    """Cut the given columns of x into bins, returns a (n, len(columns))
-    uint8 matrix."""
     out = np.empty((x.shape[0], len(columns)), dtype=np.uint8)
     for k in range(len(columns)):
         col = np.array(x[:, columns[k]], dtype=np.float64)
@@ -53,21 +33,14 @@ def apply_bins(x, columns, edges):
 
 
 def sigmoid(z):
-    """Logistic function."""
     return 1 / (1 + np.exp(-z))
 
 
 def log_loss(y, raw):
-    """Logistic loss of the raw scores (log-odds), y in {0, 1}."""
     return np.mean(np.logaddexp(0, raw) - y * raw)
 
 
 def build_histograms(xt, features, rows, g, h):
-    """Sum of the gradients and hessians in each bin, for each feature.
-
-    xt is the transposed binned matrix (features x samples) so that each
-    feature is a contiguous array. Returns two (len(features), N_BINS) arrays.
-    """
     G = np.zeros((len(features), N_BINS))
     H = np.zeros((len(features), N_BINS))
     g_rows = g[rows]
@@ -80,11 +53,6 @@ def build_histograms(xt, features, rows, g, h):
 
 
 def best_split(G, H, lam, min_child_hess):
-    """Find the best split of a node from its histograms.
-
-    Returns (gain, feature position, threshold bin, nan_left).
-    A gain <= 0 means that no split is useful.
-    """
     g_total = G[0].sum()
     h_total = H[0].sum()
     parent_score = g_total**2 / (h_total + lam)
@@ -111,7 +79,6 @@ def best_split(G, H, lam, min_child_hess):
 
 
 class Tree:
-    """A regression tree stored as lists of nodes (feature -1 = leaf)."""
 
     def __init__(self):
         self.feature = []
@@ -123,7 +90,6 @@ class Tree:
         self.depth = 0
 
     def add_node(self, value):
-        """Add a leaf and return its index."""
         self.feature.append(-1)
         self.threshold.append(0)
         self.nan_left.append(False)
@@ -133,7 +99,6 @@ class Tree:
         return len(self.value) - 1
 
     def to_arrays(self):
-        """Copy the lists into numpy arrays, used for a fast prediction."""
         self.feature_arr = np.array(self.feature)
         self.threshold_arr = np.array(self.threshold)
         self.nan_left_arr = np.array(self.nan_left)
@@ -142,7 +107,6 @@ class Tree:
         self.value_arr = np.array(self.value)
 
     def predict(self, xb):
-        """Leaf value of every row of the binned matrix xb."""
         node = np.zeros(xb.shape[0], dtype=int)
         rows = np.arange(xb.shape[0])
         for step in range(self.depth):
@@ -157,19 +121,6 @@ class Tree:
 
 
 class GBDT:
-    """Gradient boosting of depth-limited trees with the logistic loss.
-
-    Parameters:
-        n_trees: maximum number of trees
-        learning_rate: each tree is multiplied by this (shrinkage)
-        max_depth: depth of the trees
-        lam: L2 regularization of the leaf values
-        min_child_hess: minimum hessian sum in a child
-        subsample: fraction of the rows used for each tree
-        colsample: fraction of the columns used for each tree
-        early_stopping: stop when the validation loss has not improved
-            for this many trees
-    """
 
     def __init__(
         self,
@@ -196,7 +147,6 @@ class GBDT:
         self.verbose = verbose
 
     def grow_tree(self, xt, g, h, rows, features):
-        """Grow one tree on the given rows and features."""
         tree = Tree()
         G, H = build_histograms(xt, features, rows, g, h)
         self.split_node(tree, xt, g, h, rows, features, G, H, 0)
@@ -205,8 +155,6 @@ class GBDT:
         return tree
 
     def split_node(self, tree, xt, g, h, rows, features, G, H, depth):
-        """Add a node for these rows, and split it recursively if useful.
-        Returns the index of the node."""
         value = -self.learning_rate * G[0].sum() / (H[0].sum() + self.lam)
         node = tree.add_node(value)
         if depth == self.max_depth:
@@ -236,8 +184,6 @@ class GBDT:
         return node
 
     def fit(self, xb, y, xb_val, y_val):
-        """Train on the binned matrix xb (labels y in {0, 1}), with early
-        stopping on the validation set (xb_val, y_val)."""
         rng = np.random.default_rng(self.seed)
         n = xb.shape[0]
         n_features = xb.shape[1]
@@ -279,14 +225,12 @@ class GBDT:
         return self
 
     def decision_function(self, xb):
-        """Raw scores (log-odds) of the rows of the binned matrix xb."""
         raw = np.full(xb.shape[0], self.base)
         for tree in self.trees:
             raw += tree.predict(xb)
         return raw
 
     def split_counts(self, n_features):
-        """Number of splits on each feature (simple importance measure)."""
         counts = np.zeros(n_features)
         for tree in self.trees:
             for f in tree.feature:

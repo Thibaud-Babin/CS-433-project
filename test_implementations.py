@@ -1,12 +1,3 @@
-"""Tests for the linear regression methods in implementations.py.
-
-Run from the project1 folder with:  python -m pytest test_implementations.py -v
-
-The first group reproduces the expected values from the public grading tests
-(grading_tests/test_project1_public.py). The second group checks mathematical
-properties on a larger random problem.
-"""
-
 import numpy as np
 import pytest
 
@@ -35,7 +26,6 @@ def initial_w():
 
 @pytest.fixture()
 def random_problem():
-    """Well-conditioned linear problem with N=200 samples and D=5 features."""
     rng = np.random.default_rng(0)
     tx = np.c_[np.ones(200), rng.normal(size=(200, 4))]
     true_w = rng.normal(size=5)
@@ -44,7 +34,6 @@ def random_problem():
 
 
 def check_output(w, loss, expected_w, expected_loss):
-    """Check values and the required output format (1D w, scalar loss)."""
     np.testing.assert_allclose(w, expected_w, rtol=RTOL, atol=ATOL)
     np.testing.assert_allclose(loss, expected_loss, rtol=RTOL, atol=ATOL)
     assert np.ndim(loss) == 0
@@ -210,13 +199,11 @@ needs_reg_logistic = pytest.mark.skipif(
 
 @pytest.fixture()
 def y_binary(y):
-    """Binary labels built the same way as in the grading tests."""
     return (y > 0.2) * 1.0
 
 
 @pytest.fixture()
 def random_classification():
-    """Non-separable binary problem with N=300 samples and D=4 features."""
     rng = np.random.default_rng(1)
     tx = np.c_[np.ones(300), rng.normal(size=(300, 3))]
     true_w = np.array([0.3, 1.0, -2.0, 0.5])
@@ -226,7 +213,6 @@ def random_classification():
 
 
 def reference_log_loss(y, tx, w):
-    """Mean negative log-likelihood, written independently of implementations.py."""
     z = tx @ w
     return np.mean(np.logaddexp(0, z) - y * z)
 

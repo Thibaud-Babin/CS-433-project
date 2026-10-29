@@ -11,7 +11,6 @@ from implementations import (
 
 
 def f1_score(y_true, y_pred):
-    """F1 score of binary predictions."""
     y_true = np.array(y_true) == 1
     y_pred = np.array(y_pred) == 1
     tp = np.sum(y_true & y_pred)
@@ -23,14 +22,12 @@ def f1_score(y_true, y_pred):
 
 
 def accuracy(y_true, y_pred):
-    """Fraction of correct binary predictions."""
     y_true = np.array(y_true) == 1
     y_pred = np.array(y_pred) == 1
     return np.mean(y_true == y_pred)
 
 
 def best_threshold(y_true, scores):
-    """Find the threshold on the scores that gives the best F1 score."""
     order = np.argsort(-scores)
     sorted_scores = scores[order]
     sorted_y = y_true[order]
@@ -55,8 +52,6 @@ def best_threshold(y_true, scores):
 
 
 def build_k_indices(y, k_fold, seed):
-    """Split the sample indices into k folds with the same ratio of
-    positives in each fold (stratified k-fold)."""
     rng = np.random.default_rng(seed)
     folds = []
     for k in range(k_fold):
@@ -76,7 +71,6 @@ def build_k_indices(y, k_fold, seed):
 
 
 def train_model(model, y, tx):
-    """Train one model described by a dict (see tune.py) and return (w, loss)."""
     method = model["method"]
     n_features = tx.shape[1]
     initial_w = np.zeros(n_features, dtype=np.float32)
@@ -104,15 +98,6 @@ def train_model(model, y, tx):
 
 
 def cross_validate(tx, y, k_indices, models, verbose=True):
-    """Run k-fold cross-validation for a list of models, all on the same folds.
-
-    models is a list of dicts, each with a "name" and a "method" (plus the
-    hyperparameters needed by that method, see train_model).
-
-    Returns a dict {model name: results}. The results are computed on the
-    out-of-fold scores: "threshold", "f1", "fold_f1" (one F1 per fold),
-    "accuracy", "train_loss" (mean over folds) and "scores".
-    """
     n = len(y)
     scores = {}
     losses = {}

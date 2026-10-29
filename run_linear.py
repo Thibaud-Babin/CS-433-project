@@ -1,28 +1,3 @@
-"""Linear-model pipeline of the report (regularized logistic regression).
-
-This script runs the whole pipeline end-to-end and writes the predictions for
-the test set to a csv file in the format required by AIcrowd
-(see data/sample_submission.csv):
-
-1. load the BRFSS data (with the .npy cache from preprocessing.load_data),
-2. preprocess the features (Preprocessor, all statistics learned on train),
-3. pick the decision threshold by stratified k-fold cross-validation
-   (maximizing the F1 score on the out-of-fold predictions),
-4. retrain the model on the full training set,
-5. predict on the test set and map the scores to {-1, +1}.
-
-The pipeline is deterministic for a given --seed (the only random method,
-SGD, is not used by default), so re-running it reproduces the same csv.
-
-Usage:
-    python run_linear.py                   # reg. logistic, all features
-    python run_linear.py --features selected      # the 21 hand-picked features
-    python run_linear.py --method least_squares   # pick another method
-    python run_linear.py --help                   # all options
-
-See README.md for the full pipeline description.
-"""
-
 import argparse
 
 import numpy as np
@@ -37,7 +12,6 @@ DEFAULT_MAX_ITERS = 500
 
 
 def build_model(args):
-    """Return the model dict understood by cross_validation.train_model."""
     model = {"name": args.method, "method": args.method}
     if args.method in ("ridge", "reg_logistic"):
         model["lambda"] = args.lambda_
@@ -50,12 +24,6 @@ def build_model(args):
 def run_pipeline(
     x_train, x_test, y_train, test_ids, columns, model, features, folds, seed
 ):
-    """Train on x_train, predict on x_test and return the {-1, +1} labels.
-
-    Returns a tuple (y_pred, cv_f1, threshold). cv_f1 and threshold are the
-    out-of-fold F1 score and the threshold that maximizes it, both obtained
-    with a stratified k-fold cross-validation.
-    """
     preprocessor = Preprocessor(features=features)
     tx_train = preprocessor.fit_transform(x_train, columns)
     tx_test = preprocessor.transform(x_test)

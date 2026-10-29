@@ -2,13 +2,11 @@ import numpy as np
 
 
 def compute_mse(y, tx, w):
-    """Mean squared error loss (with the 1/2 factor)."""
     e = y - tx.dot(w)
     return e.dot(e) / (2 * len(e))
 
 
 def compute_mse_gradient(y, tx, w):
-    """Gradient of the MSE loss at w."""
     e = y - tx.dot(w)
     return -tx.T.dot(e) / len(e)
 
@@ -69,25 +67,21 @@ def ridge_regression(y, tx, lambda_):
 
 
 def compute_utilities(tx, w):
-    """Score U = tx @ w of each sample."""
     return tx.dot(w)
 
 
 def compute_probabilities(tx, w):
-    """Sigmoid of the scores, P(y = 1 | x)."""
     U = compute_utilities(tx, w)
     U = np.clip(U, -30, 30)
     return 1 / (1 + np.exp(-U))
 
 
 def log_loss(y, tx, w):
-    """Logistic loss (mean negative log-likelihood)."""
     U = compute_utilities(tx, w)
     return np.mean(np.logaddexp(0, U) - y * U)
 
 
 def log_loss_gradient(y, tx, w):
-    """Gradient of the logistic loss at w."""
     N = len(y)
     P = compute_probabilities(tx, w)
     return tx.T.dot(P - y) / N
