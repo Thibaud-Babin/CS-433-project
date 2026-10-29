@@ -8,3 +8,4 @@ __pycache__/
 ex0*/
 submission*.csv
 results/*.log
+experiments/

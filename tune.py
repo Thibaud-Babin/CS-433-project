@@ -25,7 +25,9 @@ def largest_eigenvalue(tx):
     to save time and memory."""
     sub = tx[::10].astype(np.float64)
     eigenvalues = np.linalg.eigvalsh(sub.T.dot(sub) / len(sub))
-    return eigenvalues[-1]
+    # a Python float (not numpy float64), otherwise w becomes float64 and the
+    # whole float32 matrix is converted at every gradient step
+    return float(eigenvalues[-1])
 
 
 def make_models(tx):

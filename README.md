@@ -13,7 +13,9 @@ Only Python, NumPy and matplotlib are used (no external ML libraries).
 | `preprocessing.py` | Data loading with `.npy` cache, feature cleaning / one-hot encoding / standardization (`Preprocessor`), label conversion |
 | `cross_validation.py` | F1 / accuracy, F1-optimal threshold, stratified k-fold cross-validation |
 | `tune.py` | Hyperparameter search of all methods with 5-fold CV, results in `results/cv_results.csv` |
-| `run.py` | Reproducible end-to-end script: trains a model and writes the AIcrowd submission (`submission.csv`) |
+| `gbdt.py` | Gradient-boosted decision trees in NumPy (histogram binning, logistic loss, early stopping) |
+| `run.py` | Reproduces our best submission (boosted trees) and writes `submission.csv`; `--cv` runs 5-fold CV |
+| `run_linear.py` | End-to-end pipeline with the linear methods (best: regularized logistic regression) |
 | `eda.ipynb` | Exploratory data analysis |
 | `test_implementations.py`, `test_pipeline.py` | Unit tests (`pytest`) |
 | `report/` | LaTeX template (IEEEtran) for the 2-page report |
@@ -34,18 +36,30 @@ pytest test_implementations.py test_pipeline.py
 ## Reproducing the submission
 
 ```
-python run.py                     # best model: regularized logistic on all features
-python run.py --features selected # the 21 hand-picked features
-python run.py --help              # all options
+python run.py        # boosted trees, writes submission.csv (~6 min)
+python run.py --cv   # 5-fold cross-validation of the same model (~30 min)
 ```
 
-The default configuration is the best model found by `tune.py`
-(`reg_logistic(lambda=0.0001, gamma=0.5, iters=500)` on all features,
-5-fold CV F1 = 0.4290; see `results/cv_results.csv`). `run.py` preprocesses
-the data, chooses the decision threshold by stratified 5-fold cross-validation
-(maximizing the F1 score on the out-of-fold scores), retrains on the full
-training set and writes `submission.csv` in the AIcrowd format. The run is
-deterministic for a given `--seed`.
+Our best model is gradient-boosted trees (`gbdt.py`): depth-3 trees,
+learning rate 0.1, 50% row and column subsampling, early stopping on 10% of
+the training set. Every non-metadata column is cut into 64 bins (one bin
+holds the missing values), so the trees need no imputation or encoding.
+HAREHAB1 (cardiac rehabilitation) is excluded: it is only asked to people who
+had a heart attack, so it leaks the label. 5-fold CV F1 = 0.4357 +- 0.0028
+(accuracy 0.872 at the F1-optimal threshold). The threshold is chosen to
+maximize F1 on the early-stopping split.
+
+The linear methods are run with `run_linear.py` (default:
+`reg_logistic(lambda=0.0001, gamma=0.5, iters=500)` on all features,
+5-fold CV F1 = 0.4290; see `results/cv_results.csv`). It preprocesses the
+data, chooses the threshold by stratified 5-fold cross-validation, retrains
+on the full training set and writes `submission.csv`.
+
+```
+python run_linear.py                     # regularized logistic, all features
+python run_linear.py --features selected # the 21 hand-picked features
+python run_linear.py --help              # all options
+```
 
 ## Pipeline
 

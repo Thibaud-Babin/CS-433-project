@@ -3,7 +3,14 @@
 import numpy as np
 import pytest
 
-from cross_validation import best_threshold, build_k_indices, cross_validate, f1_score
+from cross_validation import (
+    accuracy,
+    best_threshold,
+    build_k_indices,
+    cross_validate,
+    f1_score,
+)
+from gbdt import GBDT, NAN_BIN, apply_bins, fit_bin_edges
 from implementations import least_squares
 from preprocessing import Preprocessor, clean_sentinels, to_01, to_pm1
 
@@ -110,3 +117,29 @@ def test_cross_validate_skips_failing_model():
     # least squares fails on the singular matrix, ridge still works
     assert "ls" not in results
     assert results["ridge"]["f1"] == pytest.approx(1.0)
+
+
+def test_bins_put_nan_in_last_bin():
+    x = np.array([[1.0, 5.0], [2.0, np.nan], [3.0, 7.0], [np.nan, 5.0]])
+    edges = fit_bin_edges(x, [0, 1])
+    xb = apply_bins(x, [0, 1], edges)
+    assert xb.dtype == np.uint8
+    np.testing.assert_array_equal(xb[:, 0], [0, 1, 2, NAN_BIN])
+    np.testing.assert_array_equal(xb[:, 1], [0, NAN_BIN, 1, 0])
+
+
+def test_gbdt_learns_non_linear_rule():
+    # y = 1 when exactly one of the two features is large (XOR), which no
+    # linear model can learn, plus a missing value that means "positive"
+    rng = np.random.default_rng(0)
+    x = rng.random((4000, 3))
+    y = ((x[:, 0] > 0.5) != (x[:, 1] > 0.5)).astype(float)
+    x[:200, 2] = np.nan
+    y[:200] = 1.0
+    edges = fit_bin_edges(x, [0, 1, 2])
+    xb = apply_bins(x, [0, 1, 2], edges)
+    model = GBDT(n_trees=200, max_depth=3, subsample=0.8, colsample=1.0)
+    model.fit(xb[:3000], y[:3000], xb[3000:], y[3000:])
+    pred = model.decision_function(xb) >= 0
+    assert accuracy(y[3000:], pred[3000:]) > 0.95
+    assert np.all(pred[:200])
